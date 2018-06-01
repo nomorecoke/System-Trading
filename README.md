@@ -15,4 +15,5 @@ Trader.py : trading 알고리즘이 들어있는 파일
 오전 9시 -> Trader.py를 실행: open api를 활용하여 buy_list.txt에 매수 종목 저장 및 매수
 
 05/31 - log파일을 작성하여 작업 스케쥴러의 작동을 확인
+
 06/01 - 매수 알고리즘 수정 및 git upload
