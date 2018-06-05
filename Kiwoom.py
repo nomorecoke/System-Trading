@@ -13,6 +13,7 @@ class Kiwoom(QAxWidget):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
+        ohlcv = {'date': [], 'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
 
     def _create_kiwoom_instance(self):
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
@@ -28,13 +29,19 @@ class Kiwoom(QAxWidget):
     def _receive_condition_ver(self, iRet, sMsg):
         a = self.dynamicCall("GetConditionNameList()")
         print (a)
-        self.tr_event_loop.exit()
+        try:
+            self.tr_event_loop.exit()
+        except AttributeError:
+            pass
 
     def _receive_condition_data(self,screen_no, code_list, condition_name, index, next):
         code_list= code_list.split(';')
         self.condition_output =  code_list[:-1]
         print(self.condition_output)
-        self.tr_event_loop.exit()
+        try:
+            self.tr_event_loop.exit()
+        except AttributeError:
+            pass
 
     def comm_connect(self):
         self.dynamicCall("CommConnect()")
@@ -95,6 +102,9 @@ class Kiwoom(QAxWidget):
         if rqname == "opt10081_req":
             self._opt10081(rqname, trcode)
 
+        elif rqname == "opt10080_req":
+            self._opt10080(rqname, trcode)
+
         elif rqname == "opw00001_req":
             self._opw00001(rqname, trcode)
 
@@ -105,6 +115,24 @@ class Kiwoom(QAxWidget):
             self.tr_event_loop.exit()
         except AttributeError:
             pass
+
+    def _opt10080(self, rqname, trcode):
+        data_cnt = self._get_repeat_cnt(trcode, rqname)
+        for i in range(data_cnt):
+            date = self._comm_get_data(trcode, "", rqname, i, "일자")
+            open = self._comm_get_data(trcode, "", rqname, i, "시가")
+            high = self._comm_get_data(trcode, "", rqname, i, "고가")
+            low = self._comm_get_data(trcode, "", rqname, i, "저가")
+            close = self._comm_get_data(trcode, "", rqname, i, "현재가")
+            volume = self._comm_get_data(trcode, "", rqname, i, "거래량")
+
+            self.ohlcv['date'].append(date)
+            self.ohlcv['open'].append(abs(int(open)))
+            self.ohlcv['high'].append(abs(int(high)))
+            self.ohlcv['low'].append(abs(int(low)))
+            self.ohlcv['close'].append(abs(int(close)))
+            self.ohlcv['volume'].append(abs(int(volume)))
+
 
     def _opt10081(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
@@ -118,11 +146,17 @@ class Kiwoom(QAxWidget):
             volume = self._comm_get_data(trcode, "", rqname, i, "거래량")
 
             self.ohlcv['date'].append(date)
-            self.ohlcv['open'].append(int(open))
-            self.ohlcv['high'].append(int(high))
-            self.ohlcv['low'].append(int(low))
-            self.ohlcv['close'].append(int(close))
-            self.ohlcv['volume'].append(int(volume))
+            self.ohlcv['open'].append(abs(int(open)))
+            self.ohlcv['high'].append(abs(int(high)))
+            self.ohlcv['low'].append(abs(int(low)))
+            self.ohlcv['close'].append(abs(int(close)))
+            self.ohlcv['volume'].append(abs(int(volume)))
+
+
+
+        #판다스를 이용하여 저장
+        #df = pd.DataFrame(kiwoom.ohlcv, columns=['open', 'high', 'low', 'close', 'volume'], index=kiwoom.ohlcv['date'])
+
 
     # send order added 0521
     def send_order(self, rqname, screen_no, acc_no, order_type, code, quantity, price, hoga, order_no):
@@ -156,8 +190,8 @@ class Kiwoom(QAxWidget):
         d2_deposit = self._comm_get_data(trcode, "", rqname, 0, "d+2추정예수금")
         self.d2_deposit = Kiwoom.change_format(d2_deposit)
 
-    # 잔고 조회
 
+    # 잔고 조회
     def _opw00018(self, rqname, trcode):
         # single data
         total_purchase_price = self._comm_get_data(trcode, "", rqname, 0, "총매입금액")
@@ -202,6 +236,9 @@ class Kiwoom(QAxWidget):
             #print(name, ":", code_num)
             self.opw00018_output['multi'].append(
                 [name, code_num, quantity, purchase_price, current_price, eval_profit_loss_price, earning_rate])
+
+    def reset_ohlcv(self):
+        self.ohlcv = {'date': [], 'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
 
     def reset_condition_output(self):
         self.condition_output = []
@@ -257,6 +294,19 @@ class Kiwoom(QAxWidget):
         self.tr_event_loop.exec_()
         return status
 
+    def call_day_chart(self, code, date, modify):
+        self.set_input_value('종목코드', code)
+        self.set_input_value('기준일자', date)
+        self.set_input_value('수정주가구분', modify)
+        self.comm_rq_data("opt10081_req", "opt10081", 0, "0101")
+        while self.remained_data == True:
+            # 1초에 최대 5건 받기가능 안전하게 4건으로
+            time.sleep(0.25)
+            self.set_input_value('종목코드', code)
+            self.set_input_value('기준일자', date)
+            self.set_input_value('수정주가구분', modify)
+            self.comm_rq_data("opt10081_req", "opt10081", 2, "0101")
+
 
 # For test
 if __name__ == "__main__":
@@ -266,6 +316,7 @@ if __name__ == "__main__":
 
     kiwoom.reset_opw00018_output()
     kiwoom.reset_condition_output()
+    kiwoom.reset_ohlcv()
     account_number = kiwoom.get_login_info("ACCNO")
     account_number = account_number.split(';')[0]
 
@@ -280,5 +331,10 @@ if __name__ == "__main__":
     print(kiwoom.opw00018_output['multi'])
     #전일 종가..
     print("가격 : ", kiwoom.get_master_last_price("011080"))
+    kiwoom.call_day_chart("004140", "20180604", 1)
+
+
+
+    print(kiwoom.ohlcv)
     # 8104749811 <- 1억
     # 8105084911 <- 천만원

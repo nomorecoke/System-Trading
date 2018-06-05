@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5 import uic
 from Kiwoom import *
+import os
 from datetime import datetime
 import codecs
 
@@ -17,7 +18,7 @@ class MyWindow(QMainWindow, form_class):
         self.one_buy_money = 10000000
 
         self.setupUi(self)
-
+        self.load_data_lock = False
         self.trade_stocks_done = False
         self.choose_buy_done = False
         self.kiwoom = Kiwoom()
@@ -33,10 +34,11 @@ class MyWindow(QMainWindow, form_class):
 
         self.load_buy_sell_list()
 
+
         # Timer2
         self.timer2 = QTimer(self)
         #3 sec로 세팅 ms단위
-        self.timer2.start(1000 * 3)
+        self.timer2.start(1000 * 10)
         self.timer2.timeout.connect(self.timeout2)
 
 
@@ -47,7 +49,8 @@ class MyWindow(QMainWindow, form_class):
         self.comboBox.addItems(accounts_list)
 
         self.pushButton.clicked.connect(self.send_order)
-
+        # 처음에 조회
+        self.check_balance()
         self.kiwoom.dynamicCall("GetConditionLoad()")
         self.kiwoom.tr_event_loop = QEventLoop()
         self.kiwoom.tr_event_loop.exec_()
@@ -57,11 +60,10 @@ class MyWindow(QMainWindow, form_class):
     # 0529 - YW : 자동으로 검색식에 있는 종목을 매수 설정한다.
     # sell은 잔고자동편입을 이용한다.
     # algorithm 조건 식 종류 선택
-
     def choose_buy(self, algorithm):
         # 화면번호, 조건식명, 조건식 index, 0: 정적조회, 1: 실시간 조회
-        #self.kiwoom.get_condition("0156","종가과매수",5,1)
         print("choose buy")
+        self.kiwoom.reset_condition_output()
 
         # 처음은 종가과매수만 진행할 예정
         if algorithm == 0:
@@ -69,6 +71,7 @@ class MyWindow(QMainWindow, form_class):
         # 05 29 add for test
         elif algorithm == 1:
             self.kiwoom.get_condition("0156", "무패신호", 7, 0)
+
         # self.kiwoom.condition_output에 종목코드가 list로 들어가 있음
 
         # make buy_list file
@@ -76,17 +79,31 @@ class MyWindow(QMainWindow, form_class):
         log = codecs.open("log_file.txt", 'a', 'utf-8')
         now = datetime.now()
         log.write('\n%s-%s-%s %s:%s\n' %(now.year, now.month, now.day, now.hour, now.minute))
+        self.load_data_lock = True
         for i in self.kiwoom.condition_output:
             #일단은 시장가매수
-            order_price = 0
-            name = self.kiwoom.get_master_code_name(i)
-            last_price = int(self.kiwoom.get_master_last_price(i))
-            order_number = int(self.one_buy_money/last_price)
 
-            log.write("%s, %s, %s원, %s주 %d만원 \n" % (i, name,last_price, order_number, last_price*order_number/10000))
+            name = self.kiwoom.get_master_code_name(i)
+            last_price = int(self.fetch_chart_data(i))
+            order_number = int(self.one_buy_money/last_price)
+            order_price = last_price
+            log.write("%s, %s, %s원, %s주, %d만원 \n" % (i, name,last_price, order_number, last_price*order_number/10000))
             f.write("매수,%s,시장가,%d,%d,매수전\n" %(i,order_number,order_price))
         f.close()
         log.close()
+        self.load_data_lock = False
+
+    #종목 코드 기준 날짜
+    #기준 날짜부터 과거까지 순서로 조회한다. but 지금은 당일 data만 필요
+    def fetch_chart_data(self, code_num):
+        self.kiwoom.reset_ohlcv()
+        base_date = datetime.today().strftime('%Y%m%d')
+        self.kiwoom.call_day_chart(code_num, base_date, 1)
+        # 판다스를 이용하여 저장
+        df = pd.DataFrame(self.kiwoom.ohlcv, columns=['open', 'high', 'low', 'close', 'volume'], index=self.kiwoom.ohlcv['date'])
+        return df.ix[base_date]["close"]
+
+
 
     def trade_stocks(self):
         hoga_lookup = {'지정가': "00", '시장가': "03"}
@@ -210,14 +227,14 @@ class MyWindow(QMainWindow, form_class):
             self.trade_stocks_done = False
         #3시 10분 종목선정~
 
-        if QTime(15, 10, 0) < current_time < QTime(15, 20, 0) and self.choose_buy_done is False:
+        if QTime(15, 10 ,0) < current_time  and self.choose_buy_done is False:
             self.choose_buy(0)
             self.choose_buy_done = True
 
         # 오후 6시 프로그램 자동 종료
         if current_time > QTime(18,00,0) :
             print("End program")
-            app.exit()
+            self.quit()
 
         text_time = current_time.toString("hh:mm:ss")
         time_msg = "현재시간: " + text_time
@@ -251,11 +268,13 @@ class MyWindow(QMainWindow, form_class):
                                hoga_lookup[hoga],"")
 
     def timeout2(self):
-        #체크 하지 않아도 system trading 업데이트
-        self.load_buy_sell_list()
-        #check 했을 때 만 자동 조회
-        if self.checkBox.isChecked():
-            self.check_balance()
+        #연속조회시 transaction 충돌로 starvation이 걸림
+        if self.load_data_lock is False :
+            #체크 하지 않아도 system trading 업데이트
+            self.load_buy_sell_list()
+            #check 했을 때 만 자동 조회
+            if self.checkBox.isChecked():
+                self.check_balance()
 
     def check_balance(self):
         self.kiwoom.reset_opw00018_output()
@@ -316,6 +335,7 @@ class MyWindow(QMainWindow, form_class):
 
 
 if __name__ == "__main__":
+    current_time = QTime.currentTime()
     app = QApplication(sys.argv)
     myWindow = MyWindow()
     myWindow.show()
@@ -324,13 +344,15 @@ if __name__ == "__main__":
     now = datetime.now()
     log.write('\n%s-%s-%s %s:%s\n' % (now.year, now.month, now.day, now.hour, now.minute))
     log.close()
-    app.exec_()
-
+    sys.exit(app.exec_())
     log = codecs.open("log_file.txt", 'a', 'utf-8')
     log.write("종료")
     now = datetime.now()
     log.write('\n%s-%s-%s %s:%s\n' % (now.year, now.month, now.day, now.hour, now.minute))
     log.close()
+
+
+
 
 
 
