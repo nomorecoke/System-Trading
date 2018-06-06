@@ -13,7 +13,7 @@ class Kiwoom(QAxWidget):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
-        ohlcv = {'date': [], 'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
+        self.ohlcv = {'date': [], 'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
 
     def _create_kiwoom_instance(self):
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
@@ -118,15 +118,17 @@ class Kiwoom(QAxWidget):
 
     def _opt10080(self, rqname, trcode):
         data_cnt = self._get_repeat_cnt(trcode, rqname)
+        check_1520 = 0
         for i in range(data_cnt):
-            date = self._comm_get_data(trcode, "", rqname, i, "일자")
+            date = self._comm_get_data(trcode, "", rqname, i, "체결시간")
             open = self._comm_get_data(trcode, "", rqname, i, "시가")
             high = self._comm_get_data(trcode, "", rqname, i, "고가")
             low = self._comm_get_data(trcode, "", rqname, i, "저가")
             close = self._comm_get_data(trcode, "", rqname, i, "현재가")
             volume = self._comm_get_data(trcode, "", rqname, i, "거래량")
 
-            self.ohlcv['date'].append(date)
+            #초단위는 필요없다 뒤에 2자리 절사
+            self.ohlcv['date'].append(date[:-2])
             self.ohlcv['open'].append(abs(int(open)))
             self.ohlcv['high'].append(abs(int(high)))
             self.ohlcv['low'].append(abs(int(low)))
@@ -174,11 +176,22 @@ class Kiwoom(QAxWidget):
 
     def _receive_chejan_data(self, gubun, item_cnt, fid_list):
         # print("...")
-        print("gubun", gubun)
-        print(self.get_chejan_data(9203))
-        print(self.get_chejan_data(302))
-        print(self.get_chejan_data(900))
-        print(self.get_chejan_data(901))
+        # need to clear daily
+        f = open("data/chejan.txt", 'a')
+        if gubun == 0 :
+            print("주문 체결")
+        elif gubun == 1:
+            print("잔고 통보")
+        #print(self.get_chejan_data(9203))
+        print("\n913 : ",self.get_chejan_data(913))
+        print("\n수량",self.get_chejan_data(900))
+        print("\n가격",self.get_chejan_data(901))
+        print("\n매수 매도", self.get_chejan_data(905))
+        print("\n매수 매도", self.get_chejan_data(907))
+        print("\n10번 정보", self.get_chejan_data(10))
+
+        f.close()
+
 
     def get_login_info(self, tag):
         ret = self.dynamicCall("GetLoginInfo(QString)", tag)
@@ -306,6 +319,19 @@ class Kiwoom(QAxWidget):
             self.set_input_value('기준일자', date)
             self.set_input_value('수정주가구분', modify)
             self.comm_rq_data("opt10081_req", "opt10081", 2, "0101")
+
+    def call_minute_chart(self, code, tick_range, modify):
+        self.set_input_value('종목코드', code)
+        self.set_input_value('틱범위', tick_range)
+        self.set_input_value('수정주가구분', modify)
+        self.comm_rq_data("opt10080_req", "opt10080", 0, "0101")
+        while self.remained_data == True:
+            # 1초에 최대 5건 받기가능 안전하게 4건으로
+            time.sleep(0.25)
+            self.set_input_value('종목코드', code)
+            self.set_input_value('틱범위', tick_range)
+            self.set_input_value('수정주가구분', modify)
+            self.comm_rq_data("opt10080_req", "opt10080", 2, "0101")
 
 
 # For test

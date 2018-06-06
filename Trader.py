@@ -75,8 +75,8 @@ class MyWindow(QMainWindow, form_class):
         # self.kiwoom.condition_output에 종목코드가 list로 들어가 있음
 
         # make buy_list file
-        f = codecs.open("buy_list.txt", 'w', 'utf-8')
-        log = codecs.open("log_file.txt", 'a', 'utf-8')
+        f = codecs.open("data/buy_list.txt", 'w', 'utf-8')
+        log = codecs.open("data/log_file.txt", 'a', 'utf-8')
         now = datetime.now()
         log.write('\n%s-%s-%s %s:%s\n' %(now.year, now.month, now.day, now.hour, now.minute))
         self.load_data_lock = True
@@ -108,11 +108,11 @@ class MyWindow(QMainWindow, form_class):
     def trade_stocks(self):
         hoga_lookup = {'지정가': "00", '시장가': "03"}
 
-        f = codecs.open("buy_list.txt", 'r','utf-8')
+        f = codecs.open("data/buy_list.txt", 'r','utf-8')
         buy_list = f.readlines()
         f.close()
 
-        f = codecs.open("sell_list.txt", 'r', 'utf-8')
+        f = codecs.open("data/sell_list.txt", 'r', 'utf-8')
         sell_list = f.readlines()
         f.close()
 
@@ -154,7 +154,7 @@ class MyWindow(QMainWindow, form_class):
             buy_list[i] = buy_list[i].replace("매수전", "주문완료")
 
         # file update
-        f = codecs.open("buy_list.txt", 'w','utf-8')
+        f = codecs.open("data/buy_list.txt", 'w','utf-8')
         for row_data in buy_list:
             f.write(row_data)
         f.close()
@@ -164,17 +164,17 @@ class MyWindow(QMainWindow, form_class):
             sell_list[i] = sell_list[i].replace("매도전", "주문완료")
 
         # file update
-        f = codecs.open("sell_list.txt", 'w','utf-8')
+        f = codecs.open("data/sell_list.txt", 'w','utf-8')
         for row_data in sell_list:
             f.write(row_data)
         f.close()
 
     def load_buy_sell_list(self):
-        f = codecs.open("buy_list.txt", "r","utf-8")
+        f = codecs.open("data/buy_list.txt", "r","utf-8")
         buy_list = f.readlines()
         f.close()
 
-        f = codecs.open("sell_list.txt", "r","utf-8")
+        f = codecs.open("data/sell_list.txt", "r","utf-8")
         sell_list = f.readlines()
         f.close()
 
@@ -339,13 +339,19 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     myWindow = MyWindow()
     myWindow.show()
-    log = codecs.open("log_file.txt", 'a', 'utf-8')
+
+    log = codecs.open("data/log_file.txt", 'a', 'utf-8')
     log.write("시작")
     now = datetime.now()
     log.write('\n%s-%s-%s %s:%s\n' % (now.year, now.month, now.day, now.hour, now.minute))
     log.close()
+
+    f = open("data/chejan.txt", 'w')
+    f.write('\n%s-%s-%s %s:%s\n' % (now.year, now.month, now.day, now.hour, now.minute))
+    f.close()
+
     sys.exit(app.exec_())
-    log = codecs.open("log_file.txt", 'a', 'utf-8')
+    log = codecs.open("data/log_file.txt", 'a', 'utf-8')
     log.write("종료")
     now = datetime.now()
     log.write('\n%s-%s-%s %s:%s\n' % (now.year, now.month, now.day, now.hour, now.minute))
