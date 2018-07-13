@@ -22,3 +22,8 @@ Kiwoom.py : kiwoom API와 통신
 06/01 - 매수 알고리즘 수정 및 git upload
 
 06/05 - 버그 수정, opsen high low close volumn data 받아와서 pandas를 이용하여 저장 
+
+07/11 - 매수 알고리즘 수정 - 스캘핑 봇으로 변경(코드 비공개)
+
+07/13 - 실제 계좌로 test 수행 , 시장가 매수시 가격란에 0을 입력하지 않으면 error 발생함
+
